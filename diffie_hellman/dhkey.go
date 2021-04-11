@@ -1,49 +1,40 @@
 package dh
 
-import "math/big"
+import (
+	"crypto/rand"
+	"fmt"
+	"math/big"
+)
 
-type DHKey struct {
+// DHKeyPair holds a public and private key pair and the associated Diffie-Hellman group
+type DHKeyPair struct {
 	privKey *big.Int
-	pubKey  *big.Int
+	PubKey  *big.Int
 
 	group *DHGroup
 }
 
-func (key *DHKey) Bytes() []byte {
-	if key.pubKey == nil {
-		return nil
+// GenerateKeyPair creates a random private key in (0, p) and generates the
+// associates public key.
+func GenerateKeyPair(group *DHGroup) (*DHKeyPair, error) {
+	privKey, err := rand.Int(rand.Reader, group.P)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate private key: %v", err)
 	}
-	if key.group != nil {
-		blen := (key.group.p.BitLen() + 7) / 8
-		pubKeyBytes := make([]byte, blen)
-		copyWithLeftPad(pubKeyBytes, key.pubKey.Bytes())
-		return pubKeyBytes
+
+	zero := big.NewInt(0)
+	for privKey.Cmp(zero) == 0 {
+		privKey, err = rand.Int(rand.Reader, group.P)
+		if err != nil {
+			return nil, fmt.Errorf("failed to regenerate random int: %v", err)
+		}
 	}
-	return key.pubKey.Bytes()
-}
 
-func (key *DHKey) String() string {
-	if key.pubKey == nil {
-		return ""
-	}
-	return key.pubKey.String()
-}
+	key := &DHKeyPair{}
+	key.privKey = privKey
 
-func (key *DHKey) IsPrivateKey() bool {
-	return key.privKey != nil
-}
-
-func NewPublicKey(s []byte) *DHKey {
-	key := new(DHKey)
-	key.pubKey = new(big.Int).SetBytes(s)
-	return key
-}
-
-// copyWithLeftPad copies src to the end of dest, padding with zero bytes.
-func copyWithLeftPad(dest, src []byte) {
-	padLen := len(dest) - len(src)
-	for i := 0; i < padLen; i++ {
-		dest[i] = 0
-	}
-	copy(dest[padLen:], src)
+	// pubKey = g ^ privKey mod p
+	key.PubKey = new(big.Int).Exp(group.G, privKey, group.P)
+	key.group = group
+	return key, nil
 }
