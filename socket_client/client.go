@@ -8,6 +8,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/fatih/color"
 	aescbc "github.com/jessesomerville/cryptopals_set5/aes"
 	dh "github.com/jessesomerville/cryptopals_set5/diffie_hellman"
 )
@@ -26,6 +27,25 @@ type DHSocketClient struct {
 	SessionKey []byte
 }
 
+func NewDHSocketClient(id string) (*DHSocketClient, error) {
+	client := DHSocketClient{}
+
+	port, err := getFreePort()
+	if err != nil {
+		return nil, fmt.Errorf("set port: %v", err)
+	}
+	client.Port = port
+
+	keyPair, err := dh.GenerateKeyPair(dh.GetGroup())
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate key pair for socket client: %v", err)
+	}
+	client.KeyPair = keyPair
+
+	client.ID = id
+	return &client, nil
+}
+
 func (client *DHSocketClient) Listen() (err error) {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", client.Port))
 	if err != nil {
@@ -34,7 +54,6 @@ func (client *DHSocketClient) Listen() (err error) {
 	defer l.Close()
 	client.Listener = l
 
-	// fmt.Printf("[+] %s listening on port %d\n", client.ID, client.Port)
 	for {
 		conn, err := client.Listener.Accept()
 		if err != nil {
@@ -65,7 +84,7 @@ func (client *DHSocketClient) handleConnection(conn net.Conn) {
 			Data: client.KeyPair.PubKey.Bytes(),
 		}
 	case 2:
-		fmt.Printf("[+] %s recieved: %v\n\n", client.ID, msg.Data)
+		color.Blue("[+] %s recieved: %s", client.ID, string(msg.Data))
 
 		respMsg = Message{
 			Type: 2,
@@ -154,25 +173,6 @@ func (client *DHSocketClient) SendMessage(conn net.Conn, msg Message) error {
 		return fmt.Errorf("%s - send message: %v", client.ID, err)
 	}
 	return nil
-}
-
-func NewDHSocketClient(id string) (*DHSocketClient, error) {
-	client := DHSocketClient{}
-
-	port, err := getFreePort()
-	if err != nil {
-		return nil, fmt.Errorf("set port: %v", err)
-	}
-	client.Port = port
-
-	keyPair, err := dh.GenerateKeyPair(dh.GetGroup())
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate key pair for socket client: %v", err)
-	}
-	client.KeyPair = keyPair
-
-	client.ID = id
-	return &client, nil
 }
 
 func getFreePort() (int, error) {

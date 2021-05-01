@@ -13,9 +13,9 @@ import (
 // ComputeSessionKey generates a Diffie-Hellman session key from the client
 // private key, the peer publicKey, and the Diffie-Hellman prime.
 func ComputeSessionKey(clientKeyPair *DHKeyPair, peerPubKey *big.Int) []byte {
-	sessionKey := new(big.Int).Exp(peerPubKey, clientKeyPair.privKey, clientKeyPair.group.P)
+	sessionKey := new(big.Int).Exp(peerPubKey, clientKeyPair.privKey, clientKeyPair.Group.P)
 
-	blen := (clientKeyPair.group.P.BitLen() + 7) / 8
+	blen := (clientKeyPair.Group.P.BitLen() + 7) / 8
 	paddedSessionKey := make([]byte, blen)
 	copyWithLeftPad(paddedSessionKey, sessionKey.Bytes())
 
@@ -29,7 +29,7 @@ func SerializeDHParams(clientKeyPair *DHKeyPair) ([]byte, error) {
 	// Ensure we don't serialize the priv key
 	scrubbedKey := DHKeyPair{}
 	scrubbedKey.PubKey = clientKeyPair.PubKey
-	scrubbedKey.group = clientKeyPair.group
+	scrubbedKey.Group = clientKeyPair.Group
 
 	b := bytes.Buffer{}
 	e := gob.NewEncoder(&b)

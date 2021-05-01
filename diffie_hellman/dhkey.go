@@ -11,11 +11,11 @@ type DHKeyPair struct {
 	privKey *big.Int
 	PubKey  *big.Int
 
-	group *DHGroup
+	Group *DHGroup
 }
 
 // GenerateKeyPair creates a random private key in (0, p) and generates the
-// associates public key.
+// associated public key.
 func GenerateKeyPair(group *DHGroup) (*DHKeyPair, error) {
 	privKey, err := rand.Int(rand.Reader, group.P)
 	if err != nil {
@@ -35,6 +35,6 @@ func GenerateKeyPair(group *DHGroup) (*DHKeyPair, error) {
 
 	// pubKey = g ^ privKey mod p
 	key.PubKey = new(big.Int).Exp(group.G, privKey, group.P)
-	key.group = group
+	key.Group = group
 	return key, nil
 }

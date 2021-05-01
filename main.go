@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/fatih/color"
 	dh "github.com/jessesomerville/cryptopals_set5/diffie_hellman"
 	socketclient "github.com/jessesomerville/cryptopals_set5/socket_client"
 )
@@ -41,22 +42,40 @@ func challenge34() error {
 	if err != nil {
 		log.Fatal(err)
 	}
+	MITM, err := socketclient.NewMITMSocketClient("MITM")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	go clientA.Listen()
+	go MITM.Listen()    // Start MITM listener
+	go clientA.Listen() // Start Peer listener
+
 	fmt.Println("[+] Waiting 1 second to attempt to connect")
 	time.Sleep(time.Second)
 
-	if err := clientB.Connect(clientA.Port); err != nil {
+	// Have ClientB connect to the MITM
+	if err := clientB.Connect(MITM.Port); err != nil {
 		return err
 	}
 	defer clientB.Conn.Close()
 
-	if err := clientB.DoHandshake(clientA.Port); err != nil {
+	// Have the MITM connect to ClientA
+	if err := MITM.Connect(clientA.Port); err != nil {
+		return err
+	}
+	defer MITM.Conn.Close()
+
+	// Have ClientB initiate handshake with ClientA through the MITM
+	if err := clientB.DoHandshake(MITM.Port); err != nil {
 		return err
 	}
 
+	// ClientA and ClientB compute their session keys with what they think is the other's public key
 	clientA.SessionKey = dh.ComputeSessionKey(clientA.KeyPair, clientA.PeerPubKey)[:16]
 	clientB.SessionKey = dh.ComputeSessionKey(clientB.KeyPair, clientB.PeerPubKey)[:16]
+
+	// The MITM computes the same session key using the prime from the DHGroup the others used
+	MITM.SessionKey = dh.ComputeSessionKey(MITM.KeyPair, MITM.PeerDHGroup.P)[:16]
 
 	fmt.Printf("[+] Finished handshake\n")
 
@@ -72,7 +91,7 @@ func challenge34() error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("[+] %s received: %v\n\n", clientB.ID, respMsg.Data)
+	color.Blue("[+] %s received: %s\n\n", clientB.ID, string(respMsg.Data))
 
 	exitMsg := socketclient.Message{
 		Type: 99,
