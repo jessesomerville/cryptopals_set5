@@ -72,18 +72,27 @@ func (client *DHSocketClient) handleConnection(conn net.Conn) {
 
 	respMsg := Message{}
 	switch msg.Type {
-	case 0:
-		peerKeyPair, err := dh.DeserializeDHParams(msg.Data)
+	case 0: // Recieve DHGroup Params from peer
+		peerDHGroup, err := dh.DeserializeDHGroup(msg.Data)
 		if err != nil {
 			log.Fatal(err)
 		}
-		client.PeerPubKey = peerKeyPair.PubKey
+		client.KeyPair.Group = peerDHGroup
 
 		respMsg = Message{
 			Type: 1,
+			Data: []byte("ACK"),
+		}
+	case 2: // Recieve pubkey from peer
+		peerPubKey := big.Int{}
+		peerPubKey.SetBytes(msg.Data)
+		client.PeerPubKey = &peerPubKey
+
+		respMsg = Message{
+			Type: 3,
 			Data: client.KeyPair.PubKey.Bytes(),
 		}
-	case 2:
+	case 4:
 		color.Blue("[+] %s recieved: %s", client.ID, string(msg.Data))
 
 		respMsg = Message{
@@ -111,7 +120,7 @@ func (client *DHSocketClient) Connect(port int) error {
 }
 
 func (client *DHSocketClient) DoHandshake(peerPort int) error {
-	clientKeyData, err := dh.SerializeDHParams(client.KeyPair)
+	clientKeyData, err := dh.SerializeDHGroup(client.KeyPair.Group)
 	if err != nil {
 		return err
 	}
@@ -128,6 +137,20 @@ func (client *DHSocketClient) DoHandshake(peerPort int) error {
 	if respMsg.Type != 1 {
 		return fmt.Errorf("%s - peer replied to message type 0 with message type %d", client.ID, respMsg.Type)
 	}
+
+	pubKeyMsg := Message{Type: 2, Data: client.KeyPair.PubKey.Bytes()}
+	if err := client.SendMessage(client.Conn, pubKeyMsg); err != nil {
+		return err
+	}
+	respMsg, err = client.ReadMessage(client.Conn)
+	if err != nil {
+		return err
+	}
+
+	if respMsg.Type != 3 {
+		return fmt.Errorf("%s - peer replied to message type 2 with message type %d", client.ID, respMsg.Type)
+	}
+
 	peerPubKey := big.Int{}
 	peerPubKey.SetBytes(respMsg.Data)
 	client.PeerPubKey = &peerPubKey

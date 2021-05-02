@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/big"
 	"net"
 	"os"
 	"time"
@@ -22,7 +23,10 @@ type MITMSocketClient struct {
 
 	KeyPair     *dh.DHKeyPair
 	PeerDHGroup *dh.DHGroup
-	SessionKey  []byte
+
+	ClientAPubKey *big.Int
+	ClientBPubKey *big.Int
+	SessionKey    []byte
 }
 
 func NewMITMSocketClient(id string) (*MITMSocketClient, error) {
@@ -70,9 +74,11 @@ func (client *MITMSocketClient) handleConnection(conn net.Conn) {
 
 	respMsg := Message{}
 	switch msg.Type {
-	case 0: // Client initiates handshake and sends Pubkey, and DHGroup (p, g)
-		respMsg = *client.HandleHandshake(msg)
-	case 2: // Normal message after handshake
+	case 0: // Client initiates handshake and sends DHGroup (p, g)
+		respMsg = *client.HandleHandshakeInit(msg)
+	case 2: // Client sends public key
+		respMsg = *client.HandleHandshakePubkey(msg)
+	case 4: // Normal message after handshake
 		respMsg = *client.HandleNormalMessage(msg)
 	default:
 		log.Fatalf("%s recieved unknown message type: %d", client.ID, msg.Type)
@@ -81,18 +87,17 @@ func (client *MITMSocketClient) handleConnection(conn net.Conn) {
 	client.handleConnection(conn)
 }
 
-func (client *MITMSocketClient) HandleHandshake(msg *Message) *Message {
+func (client *MITMSocketClient) HandleHandshakeInit(msg *Message) *Message {
 	color.Red("[+] MITM recieved handshake initiation")
-	clientAKeyPair, err := dh.DeserializeDHParams(msg.Data)
+	clientAGroup, err := dh.DeserializeDHGroup(msg.Data)
 	if err != nil {
 		log.Fatal(err)
 	}
-	client.PeerDHGroup = clientAKeyPair.Group
-	clientAKeyPair.PubKey = client.PeerDHGroup.P // replace the pubkey with p
+	client.PeerDHGroup = clientAGroup
 
-	forwardMsgData, err := dh.SerializeDHParams(clientAKeyPair)
+	forwardMsgData, err := dh.SerializeDHGroup(clientAGroup)
 	if err != nil {
-		color.Red("[!] MITM failed to serialize injected DH key pair")
+		color.Red("[!] MITM failed to serialize injected DH Group")
 		os.Exit(1)
 	}
 	forwardMsg := Message{
@@ -111,7 +116,26 @@ func (client *MITMSocketClient) HandleHandshake(msg *Message) *Message {
 	}
 
 	color.Red("[+] MITM returning p to handshake initiator")
-	respMsg.Data = client.PeerDHGroup.P.Bytes()
+	return respMsg
+}
+
+func (client *MITMSocketClient) HandleHandshakePubkey(msg *Message) *Message {
+	clientAPubKey := big.Int{}
+	clientAPubKey.SetBytes(msg.Data)
+	client.ClientAPubKey = &clientAPubKey
+
+	if err := client.SendMessage(client.Conn, *msg); err != nil {
+		color.Red("[!] MITM failed to forward pubkey message")
+		os.Exit(1)
+	}
+	respMsg, err := client.ReadMessage(client.Conn)
+	if err != nil {
+		color.Red("[!] MITM failed to read pubkey response")
+		os.Exit(1)
+	}
+	clientBPubKey := big.Int{}
+	clientBPubKey.SetBytes(msg.Data)
+	client.ClientBPubKey = &clientBPubKey
 	return respMsg
 }
 

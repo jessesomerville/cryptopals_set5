@@ -24,37 +24,32 @@ func ComputeSessionKey(clientKeyPair *DHKeyPair, peerPubKey *big.Int) []byte {
 	return hash.Sum(nil)
 }
 
-// SerializeDHParams serializes the client's DHKeyPair without the private key
-func SerializeDHParams(clientKeyPair *DHKeyPair) ([]byte, error) {
-	// Ensure we don't serialize the priv key
-	scrubbedKey := DHKeyPair{}
-	scrubbedKey.PubKey = clientKeyPair.PubKey
-	scrubbedKey.Group = clientKeyPair.Group
-
+// SerializeDHGroup serializes a Diffie-Hellman group
+func SerializeDHGroup(grp *DHGroup) ([]byte, error) {
 	b := bytes.Buffer{}
 	e := gob.NewEncoder(&b)
-	if err := e.Encode(scrubbedKey); err != nil {
-		return nil, fmt.Errorf("failed to serialize handshake message: %v", err)
+	if err := e.Encode(grp); err != nil {
+		return nil, fmt.Errorf("failed to serialize Diffie-Hellman Group: %w", err)
 	}
 	return []byte(base64.StdEncoding.EncodeToString(b.Bytes())), nil
 }
 
-// DeserializeDHParams deserializes the peer's DHKeyPair
-func DeserializeDHParams(encoded []byte) (*DHKeyPair, error) {
+// DeserializeDHGroup deserializes a Diffie-Hellman group
+func DeserializeDHGroup(encoded []byte) (*DHGroup, error) {
 	rawBytes, err := base64.StdEncoding.DecodeString(string(encoded))
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode handshake bytes: %v", err)
+		return nil, fmt.Errorf("failed to decode Diffie-Hellman Group bytes: %v", err)
 	}
 
-	handshakeBytes := bytes.Buffer{}
-	handshakeBytes.Write(rawBytes)
-	decoder := gob.NewDecoder(&handshakeBytes)
+	groupBytes := bytes.Buffer{}
+	groupBytes.Write(rawBytes)
+	decoder := gob.NewDecoder(&groupBytes)
 
-	handshakeMsg := DHKeyPair{}
-	if err := decoder.Decode(&handshakeMsg); err != nil {
+	groupMsg := DHGroup{}
+	if err := decoder.Decode(&groupMsg); err != nil {
 		return nil, fmt.Errorf("failed to deserialize handshake message: %v", err)
 	}
-	return &handshakeMsg, nil
+	return &groupMsg, nil
 }
 
 // copyWithLeftPad copies src to the end of dest, padding with zero bytes.
