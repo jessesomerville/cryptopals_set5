@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/fatih/color"
+	"github.com/jessesomerville/cryptopals_set5/color"
 	dh "github.com/jessesomerville/cryptopals_set5/diffie_hellman"
 	socketclient "github.com/jessesomerville/cryptopals_set5/socket_client"
 )

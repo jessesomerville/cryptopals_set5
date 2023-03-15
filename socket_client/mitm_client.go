@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/fatih/color"
+	"github.com/jessesomerville/cryptopals_set5/color"
 	aescbc "github.com/jessesomerville/cryptopals_set5/aes"
 	dh "github.com/jessesomerville/cryptopals_set5/diffie_hellman"
 )
